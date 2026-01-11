@@ -1,4 +1,4 @@
-name: Build EvoX Senna (Extreme Slim)
+name: Build EvoX Android 16 (Baklava bq1)
 on:
   workflow_dispatch:
 
@@ -9,12 +9,12 @@ jobs:
       contents: write
     
     steps:
-    # 1. ЧИСТКА МЕСТА (Extreme Edition)
+    # 1. ЧИСТКА МЕСТА (Режим Берсерка)
     - name: Maximize Build Space
       uses: easimon/maximize-build-space@master
       with:
         root-reserve-mb: 512
-        # УМЕНЬШИЛИ SWAP ДО 1 ГБ (Было 10). Это вернет 9 ГБ диска.
+        # SWAP 1 ГБ. Нам нужен каждый мегабайт диска.
         swap-size-mb: 1024
         remove-dotnet: 'true'
         remove-android: 'true'
@@ -23,34 +23,34 @@ jobs:
         remove-docker-images: 'true'
         overprovision-lvm: 'true'
 
-    # 2. Получаем твои файлы (папку senna)
+    # 2. Получаем твои файлы
     - name: Checkout Repo
       uses: actions/checkout@v3
       with:
         path: my_repo
 
-    # 3. Установка минимума софта
+    # 3. Софт (Добавил зависимости для новых андроидов)
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
+        sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 rsync
         mkdir -p ~/bin
         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         git config --global user.name "Bot"
         git config --global user.email "bot@example.com"
 
-    # 4. Инициализация с фильтрами (Экономим ~5 ГБ)
+    # 4. Инициализация (Android 16 - bq1)
     - name: Repo Init
       run: |
         mkdir evox
         cd evox
         export PATH=~/bin:$PATH
-        # --groups=all,-notdefault,-device,-darwin,-x86,-mips
-        # НЕ качаем эмуляторы, мак-версии и прочий мусор
+        # ВНИМАНИЕ: Ветка bq1
+        # depth=1 и группы - экономия места
         repo init -u https://github.com/Evolution-X/manifest -b bq1 --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
 
-    # 5. Манифест
+    # 5. Манифест (Твое дерево lineage-23 идеально подходит сюда)
     - name: Create Local Manifest
       run: |
         cd evox
@@ -80,37 +80,37 @@ jobs:
       run: |
         cd evox
         export PATH=~/bin:$PATH
-        # --optimized-fetch и --prune помогают экономить
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
         
-        # УДАЛЯЕМ .repo СРАЗУ ЖЕ! Это освободит ~40 ГБ.
+        # УДАЛЕНИЕ .repo (ЖИЗНЕННО НЕОБХОДИМО)
         rm -rf .repo
 
     # 7. Замена файлов
     - name: Install Device Tree
       run: |
+        mkdir -p evox/device/realme/senna
         rm -rf evox/device/realme/senna/*
-        echo "Copying files..."
-        # Пробуем скопировать из senna/ или tree/ (на всякий случай)
+        echo "Injecting custom tree..."
         cp -r my_repo/senna/* evox/device/realme/senna/ || cp -r my_repo/tree/* evox/device/realme/senna/
 
-    # 8. Ребрендинг
+    # 8. Ребрендинг (Lineage -> EvoX)
     - name: Convert Lineage -> EvoX
       run: |
         cd evox/device/realme/senna
         if [ -f "lineage_senna.mk" ]; then
             mv lineage_senna.mk evolution_senna.mk
         fi
+        
+        # Массовая замена слов
         find . -type f -exec sed -i 's/lineage_senna/evolution_senna/g' {} + || true
         find . -type f -exec sed -i 's/vendor\/lineage/vendor\/evolution/g' {} + || true
         
+        # Прописываем продукты
         echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/evolution_senna.mk" > AndroidProducts.mk
         echo "COMMON_LUNCH_CHOICES := evolution_senna-userdebug" >> AndroidProducts.mk
         
-        # Отключаем оверлеи Lineage, чтобы не крашилось
-        if [ -d "overlay-lineage" ]; then
-            rm -rf overlay-lineage
-        fi
+        # Удаляем конфликтные оверлеи
+        rm -rf overlay-lineage || true
 
     # 9. Сборка
     - name: Build ROM
@@ -128,7 +128,7 @@ jobs:
       if: success()
       with:
         files: evox/out/target/product/senna/evolution*.zip
-        name: Evolution X Unofficial
+        name: Evolution X Android 16 (Beta)
         tag_name: ${{ github.run_id }}
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
