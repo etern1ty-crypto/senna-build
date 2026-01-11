@@ -1,16 +1,15 @@
-name: Build EvoX for Senna
+name: Build EvoX Senna (Local Tree)
 on:
-  workflow_dispatch: # Запуск кнопкой вручную
+  workflow_dispatch: # Кнопка запуска
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    
     permissions:
       contents: write
-
+    
     steps:
-    # 1. ЧИСТКА МЕСТА (ГЛАВНЫЙ ХАК)
+    # 1. Очистка места (Освобождаем ~90 ГБ)
     - name: Maximize Build Space
       uses: easimon/maximize-build-space@master
       with:
@@ -22,7 +21,13 @@ jobs:
         remove-codeql: 'true'
         remove-docker-images: 'true'
 
-    # 2. Установка инструментов
+    # 2. Скачиваем твой репозиторий (вместе с папкой senna)
+    - name: Checkout Repo
+      uses: actions/checkout@v3
+      with:
+        path: my_repo
+
+    # 3. Установка инструментов
     - name: Install Dependencies
       run: |
         sudo apt-get update
@@ -33,16 +38,19 @@ jobs:
         git config --global user.name "Bot"
         git config --global user.email "bot@example.com"
 
-    # 3. Скачивание исходников (Shallow Sync для экономии места)
-    - name: Repo Init & Sync
+    # 4. Инициализация Evolution X (Android 14)
+    - name: Repo Init
       run: |
         mkdir evox
         cd evox
         export PATH=~/bin:$PATH
-        # Инициализируем Android 14 (UDC) с глубиной 1 (без истории, экономит 50% места)
+        # depth=1 экономит место
         repo init -u https://github.com/Evolution-X/manifest -b udc --depth=1
-        
-        # Создаем манифест Никиты
+
+    # 5. Создание манифеста (Тот самый, от Никиты, переделанный)
+    - name: Create Local Manifest
+      run: |
+        cd evox
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/senna.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -51,56 +59,90 @@ jobs:
           <remote name="lod-gl" fetch="https://gitlab.com/lineage-ovaltine-dev/proprietary_vendor_oneplus" revision="lineage-23"/>
           <remote name="q2" fetch="https://github.com/Quantom2" revision="lineage-23.0"/>
           
+          <!-- Ядро -->
           <project name="android_kernel_oneplus_sm8450" path="kernel/oneplus/sm8450" remote="lod" revision="lineage-23.0" />
           <project name="android_kernel_oneplus_sm8450-devicetrees" path="kernel/oneplus/sm8450-devicetrees" remote="lod" revision="lineage-23.0" />
           <project name="android_kernel_oneplus_sm8450-modules" path="kernel/oneplus/sm8450-modules" remote="lod" revision="lineage-23.0" />
+          
+          <!-- Дерево (База) -->
           <project name="android_device_realme_senna" path="device/realme/senna" remote="q2" revision="lineage-23.0" />
           <project name="android_device_oneplus_sm8450-common" path="device/oneplus/sm8450-common" remote="lod" revision="lineage-23.0" />
+          
+          <!-- Вендор -->
           <project name="ovaltine" path="vendor/realme/senna" remote="lod-gl" revision="lineage-23" />
           <project name="sm8450-common" path="vendor/oneplus/sm8450-common" remote="lod-gl" revision="lineage-23" />
+          
           <project name="Luk1337/android_vendor_extra" path="vendor/extra" remote="github" revision="master" />
         </manifest>
         EOF
 
-        # Синхронизация (очень долго)
+    # 6. Синхронизация
+    - name: Repo Sync
+      run: |
+        cd evox
+        export PATH=~/bin:$PATH
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
         
-        # ВАЖНО: Удаляем папку .repo чтобы освободить 40 ГБ места под сборку
+        # УДАЛЯЕМ .repo - ЭТО ОБЯЗАТЕЛЬНО, ИНАЧЕ НЕ ХВАТИТ МЕСТА
         rm -rf .repo
 
-    # 4. Ребрендинг Lineage -> Evolution (Автоматически)
-    - name: Fix Device Tree
+    # 7. ПОДМЕНА ФАЙЛОВ (Самое важное)
+    - name: Install Your Device Tree
+      run: |
+        # 1. Удаляем то, что скачалось из интернета (Lineage дерево)
+        rm -rf evox/device/realme/senna/*
+        
+        # 2. Копируем твои файлы из папки senna в репозитории
+        echo "Copying files from repo..."
+        cp -r my_repo/senna/* evox/device/realme/senna/
+
+    # 8. АВТОМАТИЧЕСКИЙ РЕБРЕНДИНГ (Fix Lineage -> EvoX)
+    - name: Convert Lineage to EvoX
       run: |
         cd evox/device/realme/senna
         
-        # Переименовываем makefile
-        mv lineage_senna.mk evolution_senna.mk
+        echo "Renaming mk file..."
+        if [ -f "lineage_senna.mk" ]; then
+            mv lineage_senna.mk evolution_senna.mk
+        fi
         
-        # Меняем содержимое makefile
-        sed -i 's/lineage_senna/evolution_senna/g' evolution_senna.mk
-        sed -i 's|vendor/lineage/config/common_full_phone.mk|vendor/evolution/config/common_full_phone.mk|g' evolution_senna.mk
+        echo "Patching file content..."
+        # Заменяем все упоминания lineage_senna на evolution_senna
+        find . -type f -exec sed -i 's/lineage_senna/evolution_senna/g' {} + || true
+        # Заменяем пути к конфигам
+        find . -type f -exec sed -i 's/vendor\/lineage/vendor\/evolution/g' {} + || true
         
-        # Меняем AndroidProducts.mk
+        # Принудительно перезаписываем AndroidProducts.mk
+        echo "Fixing AndroidProducts.mk..."
         echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/evolution_senna.mk" > AndroidProducts.mk
         echo "COMMON_LUNCH_CHOICES := evolution_senna-userdebug" >> AndroidProducts.mk
+        
+        # Отключаем специфичные оверлеи Lineage, чтобы не было ошибок
+        if [ -d "overlay-lineage" ]; then
+            mv overlay-lineage overlay-lineage-disabled
+        fi
 
-    # 5. Сборка
+    # 9. Сборка
     - name: Build ROM
       run: |
         cd evox
         export PATH=~/bin:$PATH
-        export USE_CCACHE=0 # Нет места для кэша
+        export USE_CCACHE=0
         source build/envsetup.sh
+        
+        # Выбираем устройство
         lunch evolution_senna-userdebug
+        
+        # Запускаем!
         m evolution
 
-    # 6. Загрузка результата в Релизы GitHub
-    - name: Upload to Release
+    # 10. Загрузка
+    - name: Upload Release
       uses: softprops/action-gh-release@v1
+      if: success()
       with:
         files: evox/out/target/product/senna/evolution*.zip
         name: Evolution X Unofficial
         tag_name: ${{ github.run_id }}
-        body: "Automated build"
       env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
