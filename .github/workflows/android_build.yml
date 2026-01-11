@@ -1,6 +1,6 @@
-name: Build EvoX Senna (Local Tree)
+name: Build EvoX Senna (Extreme Slim)
 on:
-  workflow_dispatch: # Кнопка запуска
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,25 +9,27 @@ jobs:
       contents: write
     
     steps:
-    # 1. Очистка места (Освобождаем ~90 ГБ)
+    # 1. ЧИСТКА МЕСТА (Extreme Edition)
     - name: Maximize Build Space
       uses: easimon/maximize-build-space@master
       with:
         root-reserve-mb: 512
-        swap-size-mb: 10240
+        # УМЕНЬШИЛИ SWAP ДО 1 ГБ (Было 10). Это вернет 9 ГБ диска.
+        swap-size-mb: 1024
         remove-dotnet: 'true'
         remove-android: 'true'
         remove-haskell: 'true'
         remove-codeql: 'true'
         remove-docker-images: 'true'
+        overprovision-lvm: 'true'
 
-    # 2. Скачиваем твой репозиторий (вместе с папкой senna)
+    # 2. Получаем твои файлы (папку senna)
     - name: Checkout Repo
       uses: actions/checkout@v3
       with:
         path: my_repo
 
-    # 3. Установка инструментов
+    # 3. Установка минимума софта
     - name: Install Dependencies
       run: |
         sudo apt-get update
@@ -38,16 +40,17 @@ jobs:
         git config --global user.name "Bot"
         git config --global user.email "bot@example.com"
 
-    # 4. Инициализация Evolution X (Android 14)
+    # 4. Инициализация с фильтрами (Экономим ~5 ГБ)
     - name: Repo Init
       run: |
         mkdir evox
         cd evox
         export PATH=~/bin:$PATH
-        # depth=1 экономит место
-        repo init -u https://github.com/Evolution-X/manifest -b udc --depth=1
+        # --groups=all,-notdefault,-device,-darwin,-x86,-mips
+        # НЕ качаем эмуляторы, мак-версии и прочий мусор
+        repo init -u https://github.com/Evolution-X/manifest -b udc --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
 
-    # 5. Создание манифеста (Тот самый, от Никиты, переделанный)
+    # 5. Манифест
     - name: Create Local Manifest
       run: |
         cd evox
@@ -59,19 +62,15 @@ jobs:
           <remote name="lod-gl" fetch="https://gitlab.com/lineage-ovaltine-dev/proprietary_vendor_oneplus" revision="lineage-23"/>
           <remote name="q2" fetch="https://github.com/Quantom2" revision="lineage-23.0"/>
           
-          <!-- Ядро -->
           <project name="android_kernel_oneplus_sm8450" path="kernel/oneplus/sm8450" remote="lod" revision="lineage-23.0" />
           <project name="android_kernel_oneplus_sm8450-devicetrees" path="kernel/oneplus/sm8450-devicetrees" remote="lod" revision="lineage-23.0" />
           <project name="android_kernel_oneplus_sm8450-modules" path="kernel/oneplus/sm8450-modules" remote="lod" revision="lineage-23.0" />
           
-          <!-- Дерево (База) -->
           <project name="android_device_realme_senna" path="device/realme/senna" remote="q2" revision="lineage-23.0" />
           <project name="android_device_oneplus_sm8450-common" path="device/oneplus/sm8450-common" remote="lod" revision="lineage-23.0" />
           
-          <!-- Вендор -->
           <project name="ovaltine" path="vendor/realme/senna" remote="lod-gl" revision="lineage-23" />
           <project name="sm8450-common" path="vendor/oneplus/sm8450-common" remote="lod-gl" revision="lineage-23" />
-          
           <project name="Luk1337/android_vendor_extra" path="vendor/extra" remote="github" revision="master" />
         </manifest>
         EOF
@@ -81,45 +80,36 @@ jobs:
       run: |
         cd evox
         export PATH=~/bin:$PATH
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        # --optimized-fetch и --prune помогают экономить
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
         
-        # УДАЛЯЕМ .repo - ЭТО ОБЯЗАТЕЛЬНО, ИНАЧЕ НЕ ХВАТИТ МЕСТА
+        # УДАЛЯЕМ .repo СРАЗУ ЖЕ! Это освободит ~40 ГБ.
         rm -rf .repo
 
-    # 7. ПОДМЕНА ФАЙЛОВ (Самое важное)
-    - name: Install Your Device Tree
+    # 7. Замена файлов
+    - name: Install Device Tree
       run: |
-        # 1. Удаляем то, что скачалось из интернета (Lineage дерево)
         rm -rf evox/device/realme/senna/*
-        
-        # 2. Копируем твои файлы из папки senna в репозитории
-        echo "Copying files from repo..."
-        cp -r my_repo/senna/* evox/device/realme/senna/
+        echo "Copying files..."
+        # Пробуем скопировать из senna/ или tree/ (на всякий случай)
+        cp -r my_repo/senna/* evox/device/realme/senna/ || cp -r my_repo/tree/* evox/device/realme/senna/
 
-    # 8. АВТОМАТИЧЕСКИЙ РЕБРЕНДИНГ (Fix Lineage -> EvoX)
-    - name: Convert Lineage to EvoX
+    # 8. Ребрендинг
+    - name: Convert Lineage -> EvoX
       run: |
         cd evox/device/realme/senna
-        
-        echo "Renaming mk file..."
         if [ -f "lineage_senna.mk" ]; then
             mv lineage_senna.mk evolution_senna.mk
         fi
-        
-        echo "Patching file content..."
-        # Заменяем все упоминания lineage_senna на evolution_senna
         find . -type f -exec sed -i 's/lineage_senna/evolution_senna/g' {} + || true
-        # Заменяем пути к конфигам
         find . -type f -exec sed -i 's/vendor\/lineage/vendor\/evolution/g' {} + || true
         
-        # Принудительно перезаписываем AndroidProducts.mk
-        echo "Fixing AndroidProducts.mk..."
         echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/evolution_senna.mk" > AndroidProducts.mk
         echo "COMMON_LUNCH_CHOICES := evolution_senna-userdebug" >> AndroidProducts.mk
         
-        # Отключаем специфичные оверлеи Lineage, чтобы не было ошибок
+        # Отключаем оверлеи Lineage, чтобы не крашилось
         if [ -d "overlay-lineage" ]; then
-            mv overlay-lineage overlay-lineage-disabled
+            rm -rf overlay-lineage
         fi
 
     # 9. Сборка
@@ -129,11 +119,7 @@ jobs:
         export PATH=~/bin:$PATH
         export USE_CCACHE=0
         source build/envsetup.sh
-        
-        # Выбираем устройство
         lunch evolution_senna-userdebug
-        
-        # Запускаем!
         m evolution
 
     # 10. Загрузка
