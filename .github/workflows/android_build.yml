@@ -48,7 +48,7 @@ jobs:
         export PATH=~/bin:$PATH
         # --groups=all,-notdefault,-device,-darwin,-x86,-mips
         # НЕ качаем эмуляторы, мак-версии и прочий мусор
-        repo init -u https://github.com/Evolution-X/manifest -b udc --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
+        repo init -u https://github.com/Evolution-X/manifest -b bq1 --depth=1 --groups=all,-notdefault,-device,-darwin,-x86,-mips
 
     # 5. Манифест
     - name: Create Local Manifest
