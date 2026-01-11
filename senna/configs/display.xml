@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<displayConfiguration>
+    <densityMapping>
+        <density>
+            <height>2412</height>
+            <width>1080</width>
+            <density>450</density>
+        </density>
+        <density>
+            <height>2772</height>
+            <width>1240</width>
+            <density>560</density>
+        </density>
+    </densityMapping>
+    <screenBrightnessMap>
+        <point>
+            <value>0.00001</value>
+            <nits>0.00579207920792122</nits>
+        </point>
+        <point>
+            <value>0.01025641025</value>
+            <nits>5.94059405569351</nits>
+        </point>
+        <point>
+            <value>0.8632478632478</value>
+            <nits>500</nits>
+        </point>
+        <point>
+            <value>1.0</value>
+            <nits>579.207920792122</nits>
+        </point>
+    </screenBrightnessMap>
+    <highBrightnessMode enabled="true">
+        <transitionPoint>0.8632478632478</transitionPoint>
+        <minimumHdrPercentOfScreen>0.1</minimumHdrPercentOfScreen>
+        <minimumLux>10100</minimumLux>
+        <timing>
+            <timeWindowSecs>1800</timeWindowSecs>
+            <timeMaxSecs>300</timeMaxSecs>
+            <timeMinSecs>60</timeMinSecs>
+        </timing>
+        <sdrHdrRatioMap>
+            <point>
+                <sdrNits>2.000</sdrNits>
+                <hdrRatio>8.000</hdrRatio>
+            </point>
+            <point>
+                <sdrNits>500.000</sdrNits>
+                <hdrRatio>1.5</hdrRatio>
+            </point>
+        </sdrHdrRatioMap>
+    </highBrightnessMode>
+    <screenBrightnessRampFastDecrease>0.06</screenBrightnessRampFastDecrease>
+    <screenBrightnessRampFastIncrease>0.06</screenBrightnessRampFastIncrease>
+    <screenBrightnessRampSlowDecrease>0.04</screenBrightnessRampSlowDecrease>
+    <screenBrightnessRampSlowIncrease>0.04</screenBrightnessRampSlowIncrease>
+    <screenBrightnessRampIncreaseMaxMillis>3000</screenBrightnessRampIncreaseMaxMillis>
+    <screenBrightnessRampDecreaseMaxMillis>3000</screenBrightnessRampDecreaseMaxMillis>
+</displayConfiguration>
+

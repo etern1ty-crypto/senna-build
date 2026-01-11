@@ -1,0 +1,14 @@
+service vendor.light-hal-2-0 /vendor/bin/hw/android.hardware.light@2.0-service.oplus
+    interface android.hardware.light@2.0::ILight default
+    class hal
+    user system
+    group system
+    shutdown critical
+
+on boot
+    chown system system /sys/class/leds/red/brightness
+    chown system system /sys/class/leds/green/brightness
+    chown system system /sys/class/leds/blue/brightness
+    
+on property:sys.boot_completed=1
+    write /sys/kernel/oplus_display/aod_light_mode_set 1

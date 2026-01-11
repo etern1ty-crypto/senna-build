@@ -1,0 +1,16 @@
+# Bluetooth
+bluetooth.device.default_name=realme GT neo 5
+
+# Graphics
+ro.surface_flinger.set_idle_timer_ms=250
+ro.surface_flinger.set_touch_timer_ms=300
+
+# Radio
+persist.radio.multisim.config=dsds
+
+# USB
+vendor.usb.product_string=realme GT neo 5
+
+# Device fix??
+ro.surface_flinger.max_physical_display_count=1
+sys.brightness.disable_gamma_conversion=1
